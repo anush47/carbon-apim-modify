@@ -1,0 +1,322 @@
+/*
+ *  Copyright WSO2 Inc.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+package org.wso2.carbon.apimgt.gateway.handlers.security;
+
+import org.wso2.carbon.apimgt.gateway.MethodStats;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Contains some context information related to an authenticated request. This can be used
+ * to access API keys and tier information related to already authenticated requests.
+ */
+public class AuthenticationContext {
+
+    private boolean authenticated;
+    private String username;
+    private String applicationTier;
+    private String tier;
+    private String apiTier;
+    private boolean isContentAwareTierPresent;
+    private String apiKey;
+    private String keyType;
+    private String callerToken;
+    private String applicationId;
+    private String applicationUUID;
+    private String applicationName;
+    private String consumerKey;
+    private String subscriber;
+    private List<String> throttlingDataList;
+    private int spikeArrestLimit;
+    private int applicationSpikesArrestLimit;
+    private String subscriberTenantDomain;
+    private String spikeArrestUnit;
+    private boolean stopOnQuotaReach;
+    private String productName;
+    private String productProvider;
+    private String apiName;
+    private String apiPublisher;
+    private String apiVersion;
+    private String issuer;
+    private List<String> requestTokenScopes;
+    private int graphQLMaxDepth;
+    private int graphQLMaxComplexity;
+    private String accessToken;
+    private Set<String> applicationGroupIds;
+
+    public List<String> getRequestTokenScopes() {
+        return requestTokenScopes;
+    }
+
+    public void setRequestTokenScopes(List<String> requestTokenScopes) {
+        this.requestTokenScopes = requestTokenScopes;
+    }
+
+    public List<String> getThrottlingDataList() {
+        return throttlingDataList;
+    }
+
+    public void setThrottlingDataList(List<String> throttlingDataList) {
+        this.throttlingDataList = throttlingDataList;
+    }
+    //Following throttle data list can be used to hold throttle data and api level throttle key
+    //should be its first element.
+
+    public boolean isContentAwareTierPresent() {
+        return isContentAwareTierPresent;
+    }
+
+    public void setIsContentAware(boolean isContentAware) {
+        this.isContentAwareTierPresent = isContentAware;
+    }
+
+    public String getApiTier() {
+        return apiTier;
+    }
+
+    public void setApiTier(String apiTier) {
+        this.apiTier = apiTier;
+    }
+
+    public String getSubscriber() {
+        return subscriber;
+    }
+
+    public void setSubscriber(String subscriber) {
+        this.subscriber = subscriber;
+    }
+
+    public boolean isAuthenticated() {
+        return authenticated;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getTier() {
+        return tier;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
+    }
+
+    public void setAuthenticated(boolean authenticated) {
+        this.authenticated = authenticated;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public void setTier(String tier) {
+        this.tier = tier;
+    }
+
+    public String getKeyType() {
+        return keyType;
+    }
+
+    public void setKeyType(String keyType) {
+        this.keyType = keyType;
+    }
+
+    @MethodStats
+    public String getCallerToken() {
+        return callerToken;
+    }
+
+    public void setCallerToken(String callerToken) {
+        this.callerToken = callerToken;
+    }
+
+    public String getApplicationTier() {
+        return applicationTier;
+    }
+
+    public void setApplicationTier(String applicationTier) {
+        this.applicationTier = applicationTier;
+    }
+
+    public String getApplicationId() {
+        return applicationId;
+    }
+
+    public void setApplicationId(String applicationId) {
+        this.applicationId = applicationId;
+    }
+
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public void setApplicationName(String applicationName) {
+        this.applicationName = applicationName;
+    }
+
+    public String getConsumerKey() {
+        return consumerKey;
+    }
+
+    public void setConsumerKey(String consumerKey) {
+        this.consumerKey = consumerKey;
+    }
+
+    public String getApplicationSpikesArrestUnit() {
+        return applicationSpikesArrestUnit;
+    }
+
+    public void setApplicationSpikesArrestUnit(String applicationSpikesArrestUnit) {
+        this.applicationSpikesArrestUnit = applicationSpikesArrestUnit;
+    }
+
+    private String applicationSpikesArrestUnit;
+
+    public int getApplicationSpikesArrestLimit(){
+        return applicationSpikesArrestLimit;
+    }
+    public void setApplicationSpikesArrestLimit(int applicationSpikesArrestLimit) {
+        this.applicationSpikesArrestLimit = applicationSpikesArrestLimit;
+    }
+
+    public int getSpikeArrestLimit() {
+        return spikeArrestLimit;
+    }
+
+    public void setSpikeArrestLimit(int spikeArrestLimit) {
+        this.spikeArrestLimit = spikeArrestLimit;
+    }
+
+    public String getSubscriberTenantDomain() {
+        return subscriberTenantDomain;
+    }
+
+    public void setSubscriberTenantDomain(String subscriberTenantDomain) {
+        this.subscriberTenantDomain = subscriberTenantDomain;
+    }
+
+    public String getSpikeArrestUnit() {
+        return spikeArrestUnit;
+    }
+
+    public void setSpikeArrestUnit(String spikeArrestUnit) {
+        this.spikeArrestUnit = spikeArrestUnit;
+    }
+
+    public boolean isStopOnQuotaReach() {
+        return stopOnQuotaReach;
+    }
+
+    public void setStopOnQuotaReach(boolean stopOnQuotaReach) {
+        this.stopOnQuotaReach = stopOnQuotaReach;
+    }
+
+    public void setProductName(String productName) {
+        this.productName = productName;
+    }
+
+    public String getProductName() {
+        return productName;
+    }
+
+    public void setProductProvider(String productProvider) {
+        this.productProvider = productProvider;
+    }
+
+    public String getProductProvider() {
+        return productProvider;
+    }
+
+    public String getApiName() {
+        return apiName;
+    }
+
+    public void setApiName(String apiName) {
+        this.apiName = apiName;
+    }
+
+    public String getApiPublisher() {
+        return apiPublisher;
+    }
+
+    public void setApiPublisher(String apiPublisher) {
+        this.apiPublisher = apiPublisher;
+    }
+
+    public String getApiVersion() {
+        return apiVersion;
+    }
+
+    public void setApiVersion(String apiVersion) {
+        this.apiVersion = apiVersion;
+    }
+
+    public String getIssuer() {
+        return issuer;
+    }
+
+    public void setIssuer(String issuer) {
+        this.issuer = issuer;
+    }
+
+    public String getApplicationUUID() {
+        return applicationUUID;
+    }
+
+    public void setApplicationUUID(String applicationUUID) {
+        this.applicationUUID = applicationUUID;
+    }
+
+    public int getGraphQLMaxDepth() {
+        return graphQLMaxDepth;
+    }
+
+    public void setGraphQLMaxDepth(int graphQLMaxDepth) {
+        this.graphQLMaxDepth = graphQLMaxDepth;
+    }
+
+    public int getGraphQLMaxComplexity() {
+        return graphQLMaxComplexity;
+    }
+
+    public void setGraphQLMaxComplexity(int graphQLMaxComplexity) {
+        this.graphQLMaxComplexity = graphQLMaxComplexity;
+    }
+
+    public String getAccessToken() {
+
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+
+        this.accessToken = accessToken;
+    }
+
+    public Set<String> getApplicationGroupIds() {
+        return applicationGroupIds;
+    }
+
+    public void setApplicationGroupIds(Set<String> applicationGroupIds) {
+        this.applicationGroupIds = applicationGroupIds;
+    }
+}

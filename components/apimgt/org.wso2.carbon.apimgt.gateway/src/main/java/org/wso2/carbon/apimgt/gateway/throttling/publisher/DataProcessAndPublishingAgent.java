@@ -1,0 +1,349 @@
+package org.wso2.carbon.apimgt.gateway.throttling.publisher;
+
+
+import org.apache.axiom.soap.SOAPBody;
+import org.apache.axiom.soap.SOAPEnvelope;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.synapse.MessageContext;
+import org.apache.synapse.core.axis2.Axis2MessageContext;
+import org.apache.synapse.transport.passthru.util.RelayUtils;
+import org.json.simple.JSONObject;
+import org.wso2.carbon.apimgt.common.gateway.util.JWTUtil;
+import org.wso2.carbon.apimgt.gateway.handlers.security.AuthenticationContext;
+import org.wso2.carbon.apimgt.gateway.handlers.throttling.APIThrottleConstants;
+import org.wso2.carbon.apimgt.gateway.internal.ServiceReferenceHolder;
+import org.wso2.carbon.apimgt.gateway.utils.GatewayUtils;
+import org.wso2.carbon.apimgt.impl.APIConstants;
+import org.wso2.carbon.apimgt.impl.dto.ThrottleProperties;
+import org.wso2.carbon.apimgt.impl.dto.VerbInfoDTO;
+import org.wso2.carbon.apimgt.impl.utils.APIUtil;
+import org.wso2.carbon.databridge.agent.DataPublisher;
+
+import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Pattern;
+import javax.xml.stream.XMLStreamException;
+
+import static org.wso2.carbon.apimgt.api.APIConstants.AIAPIConstants.*;
+
+/**
+ * This class is responsible for executing data publishing logic. This class implements runnable interface and
+ * need to execute using thread pool executor. Primary task of this class it is accept message context as parameter
+ * and perform time consuming data extraction and publish event to data publisher. Having data extraction and
+ * transformation logic in this class will help to reduce overhead added to main message flow.
+ */
+public class DataProcessAndPublishingAgent implements Runnable {
+    private static final Log log = LogFactory.getLog(DataProcessAndPublishingAgent.class);
+    private static final Pattern IPV4_PATTERN = Pattern.compile(
+            "^((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}$");
+    private static final Pattern IPV6_PATTERN = Pattern.compile(
+            "([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4})");
+    private static String streamID = "org.wso2.throttle.request.stream:1.0.0";
+    private MessageContext messageContext;
+    private DataPublisher dataPublisher;
+
+
+
+    String applicationLevelThrottleKey;
+    String applicationLevelTier;
+    String apiLevelThrottleKey;
+    String apiLevelTier;
+    String subscriptionLevelThrottleKey;
+    String subscriptionLevelTier;
+    String resourceLevelThrottleKey;
+    String authorizedUser;
+    String resourceLevelTier;
+    String apiContext;
+    String apiVersion;
+    String appTenant;
+    String apiTenant;
+    String apiName;
+    String appId;
+    String ipAddress;
+    Long totalTokens = 0L;
+    Long promptTokens = 0L;
+    Long completionTokens = 0L;
+    Map<String, String> headersMap;
+    Map<String, Object> customPropertyMap;
+    private AuthenticationContext authenticationContext;
+
+    private long messageSizeInBytes = 0L;
+
+    public DataProcessAndPublishingAgent() {
+
+        dataPublisher = getDataPublisher();
+    }
+
+    /**
+     * This method will clean data references. This method should call whenever we return data process and publish
+     * agent back to pool. Every time when we add new property we need to implement cleaning logic as well.
+     */
+    public void clearDataReference() {
+        this.authenticationContext = null;
+        this.messageContext = null;
+        this.applicationLevelThrottleKey = null;
+        this.applicationLevelTier = null;
+        this.apiLevelThrottleKey = null;
+        this.applicationLevelTier = null;
+        this.subscriptionLevelThrottleKey = null;
+        this.subscriptionLevelTier = null;
+        this.resourceLevelThrottleKey = null;
+        this.resourceLevelTier = null;
+        this.authorizedUser = null;
+        this.apiContext = null;
+        this.apiVersion = null;
+        this.appTenant = null;
+        this.apiTenant = null;
+        this.appId = null;
+        this.apiName = null;
+        this.ipAddress = null;
+        this.headersMap = null;
+        this.totalTokens = 0L;
+        this.promptTokens = 0L;
+        this.completionTokens = 0L;
+        this.messageSizeInBytes = 0L;
+        this.customPropertyMap = Collections.emptyMap();
+    }
+
+    /**
+     * This method will use to set message context.
+     */
+    public void setDataReference(String applicationLevelThrottleKey, String applicationLevelTier,
+                                 String apiLevelThrottleKey, String apiLevelTier,
+                                 String subscriptionLevelThrottleKey, String subscriptionLevelTier,
+                                 String resourceLevelThrottleKey, String resourceLevelTier,
+                                 String authorizedUser, String apiContext, String apiVersion, String appTenant,
+                                 String apiTenant, String appId, MessageContext messageContext,
+                                 AuthenticationContext authenticationContext) {
+        if (!StringUtils.isEmpty(apiLevelTier)) {
+            resourceLevelTier = apiLevelTier;
+            resourceLevelThrottleKey = apiLevelThrottleKey;
+        }
+        this.authenticationContext = authenticationContext;
+        this.messageContext = messageContext;
+        this.applicationLevelThrottleKey = applicationLevelThrottleKey;
+        this.applicationLevelTier = applicationLevelTier;
+        this.apiLevelThrottleKey = apiLevelThrottleKey;
+        this.subscriptionLevelThrottleKey = subscriptionLevelThrottleKey;
+        this.subscriptionLevelTier = subscriptionLevelTier;
+        this.resourceLevelThrottleKey = resourceLevelThrottleKey;
+        this.resourceLevelTier = resourceLevelTier;
+        this.authorizedUser = authorizedUser;
+        this.apiContext = apiContext;
+        this.apiVersion = apiVersion;
+        this.appTenant = appTenant;
+        this.apiTenant = apiTenant;
+        this.appId = appId;
+        this.apiName = GatewayUtils.getAPINameFromContextAndVersion(messageContext);
+        this.messageSizeInBytes = 0;
+        this.totalTokens = 0L;
+        this.promptTokens = 0L;
+        this.completionTokens = 0L;
+
+        ArrayList<VerbInfoDTO> list = (ArrayList<VerbInfoDTO>) messageContext.getProperty(APIConstants.VERB_INFO_DTO);
+        boolean isVerbInfoContentAware = false;
+        if (list != null && !list.isEmpty()) {
+            VerbInfoDTO verbInfoDTO = list.get(0);
+            isVerbInfoContentAware = verbInfoDTO.isContentAware();
+        }
+        //Build the message if needed from here since it cannot be done from the run() method because content 
+        //in axis2MessageContext is modified.
+        org.apache.axis2.context.MessageContext axis2MessageContext = ((Axis2MessageContext) messageContext)
+                .getAxis2MessageContext();
+        Map<String, String> transportHeaderMap = (Map<String, String>) axis2MessageContext
+                .getProperty(org.apache.axis2.context.MessageContext.TRANSPORT_HEADERS);
+        if (transportHeaderMap != null) {
+            // convert all transport headers to lower case in order to make the header condition based throttling
+            // case-insensitive
+            Map<String, String> lowerCaseTransportHeaderMap = new HashMap<>();
+            for (Map.Entry<String, String> entry : transportHeaderMap.entrySet()) {
+                lowerCaseTransportHeaderMap.put(entry.getKey().toLowerCase(), String.valueOf(entry.getValue()));
+            }
+            this.headersMap = new HashMap<>(lowerCaseTransportHeaderMap);
+        }
+
+        if (messageContext.getProperty(APIThrottleConstants.CUSTOM_PROPERTY) != null) {
+            HashMap<String, Object> propertyFromMsgCtx = (HashMap<String, Object>) messageContext.getProperty(
+                    APIThrottleConstants.CUSTOM_PROPERTY);
+
+            if (propertyFromMsgCtx != null) {
+                this.customPropertyMap = (Map<String, Object>) propertyFromMsgCtx.clone();
+            }
+        }
+
+        this.ipAddress = GatewayUtils.getIp(axis2MessageContext);
+        if (log.isDebugEnabled()) {
+            log.debug("Remote IP address : " + ipAddress);
+        }
+
+        if (authenticationContext.isContentAwareTierPresent() || isVerbInfoContentAware) {
+            Object contentLength = null;
+            if (transportHeaderMap != null) {
+                contentLength = transportHeaderMap.get(APIThrottleConstants.CONTENT_LENGTH);
+            }
+            if (contentLength != null) {
+                log.debug("Content lenght found in the request. Using it as the message size..");
+                messageSizeInBytes  = Long.parseLong(contentLength.toString());
+            } else {
+                log.debug("Building the message to get the message size..");
+                try {
+                    buildMessage(axis2MessageContext);
+                } catch (Exception ex) {
+                    //In case of any exception, it won't be propagated up,and set response size to 0
+                    log.error("Error occurred while building the message to" + " calculate the response body size", ex);
+                }
+                SOAPEnvelope env = messageContext.getEnvelope();
+                if (env != null) {
+                    SOAPBody soapbody = env.getBody();
+                    if (soapbody != null) {
+                        byte[] size = soapbody.toString().getBytes(Charset.defaultCharset());
+                        messageSizeInBytes = size.length;
+                    }
+                } 
+            }
+        }
+
+        if (((Axis2MessageContext) messageContext).getAxis2MessageContext()
+                .getProperty(AI_API_RESPONSE_METADATA) != null) {
+            Map<String, String> responseMetadata = (Map<String, String>) ((Axis2MessageContext) messageContext)
+                    .getAxis2MessageContext().getProperty(AI_API_RESPONSE_METADATA);
+            if (responseMetadata != null) {
+                if (null != responseMetadata.get(LLM_PROVIDER_SERVICE_METADATA_TOTAL_TOKEN_COUNT)) {
+                    totalTokens =
+                            Long.parseLong(responseMetadata.get(LLM_PROVIDER_SERVICE_METADATA_TOTAL_TOKEN_COUNT));
+                }
+                if (null != responseMetadata.get(LLM_PROVIDER_SERVICE_METADATA_PROMPT_TOKEN_COUNT)) {
+                    promptTokens =
+                            Long.parseLong(responseMetadata.get(LLM_PROVIDER_SERVICE_METADATA_PROMPT_TOKEN_COUNT));
+                }
+                if (null != responseMetadata.get(LLM_PROVIDER_SERVICE_METADATA_COMPLETION_TOKEN_COUNT)) {
+                    completionTokens =
+                            Long.parseLong(responseMetadata.get(LLM_PROVIDER_SERVICE_METADATA_COMPLETION_TOKEN_COUNT));
+                }
+            }
+        }
+    }
+
+    public void run() {
+        JSONObject jsonObMap = new JSONObject();
+        org.apache.axis2.context.MessageContext axis2MessageContext = ((Axis2MessageContext) messageContext)
+                .getAxis2MessageContext();
+
+        if (ipAddress != null && ipAddress.length() > 0) {
+            if (ipAddress.contains(":") && ipAddress.split(":").length == 2) {
+                log.warn("Client port will be ignored and only the IP address (IPV4) will concern from " + ipAddress);
+                ipAddress = ipAddress.split(":")[0];
+            }
+            if (IPV4_PATTERN.matcher(ipAddress).matches()) {
+                jsonObMap.put(APIThrottleConstants.IP, APIUtil.ipToLong(ipAddress));
+                jsonObMap.put(APIThrottleConstants.IPv6, 0);
+            } else if (IPV6_PATTERN.matcher(ipAddress).matches()) {
+                jsonObMap.put(APIThrottleConstants.IPv6, APIUtil.ipToBigInteger(ipAddress));
+                jsonObMap.put(APIThrottleConstants.IP, 0);
+            } else {
+                log.error("Error while parsing host IP " + ipAddress);
+                jsonObMap.put(APIThrottleConstants.IPv6, 0);
+                jsonObMap.put(APIThrottleConstants.IP, 0);
+            }
+        }
+
+        //HeaderMap will only be set if the Header Publishing has been enabled.
+        if (getThrottleProperties().isEnableHeaderConditions()) {
+            if (this.headersMap != null) {
+                jsonObMap.putAll(this.headersMap);
+            }
+        }
+        //adding any custom property if available to stream's property map
+        if (this.customPropertyMap != null) {
+            jsonObMap.putAll(this.customPropertyMap);
+        }
+
+        //Setting query parameters
+        if (getThrottleProperties().isEnableQueryParamConditions()) {
+            Map<String, String> queryParams = GatewayUtils.getQueryParams(axis2MessageContext);
+            if (queryParams != null) {
+                jsonObMap.putAll(queryParams);
+            }
+
+        }
+
+        //Publish jwt claims
+        if (getThrottleProperties().isEnableJwtConditions()) {
+            if (authenticationContext.getCallerToken() != null) {
+                Map<String, String> assertions = JWTUtil.getJWTClaims(authenticationContext.getCallerToken());
+                if (assertions != null) {
+                    jsonObMap.putAll(assertions);
+                }
+            }
+        }
+
+        //this parameter will be used to capture message size and pass it to calculation logic
+        
+        ArrayList<VerbInfoDTO> list = (ArrayList<VerbInfoDTO>) messageContext.getProperty(APIConstants.VERB_INFO_DTO);
+        boolean isVerbInfoContentAware = false;
+        if (list != null && !list.isEmpty()) {
+            VerbInfoDTO verbInfoDTO = list.get(0);
+            isVerbInfoContentAware = verbInfoDTO.isContentAware();
+        }
+
+        if (authenticationContext.isContentAwareTierPresent() || isVerbInfoContentAware) {
+            if (log.isDebugEnabled()) {
+                log.debug("Message size: " + messageSizeInBytes + "B");
+            }
+            jsonObMap.put(APIThrottleConstants.MESSAGE_SIZE, messageSizeInBytes);
+            if (!StringUtils.isEmpty(authenticationContext.getApplicationName())) {
+                jsonObMap.put(APIThrottleConstants.APPLICATION_NAME, authenticationContext.getApplicationName());
+            }
+            if (!StringUtils.isEmpty(authenticationContext.getProductName()) && !StringUtils
+                    .isEmpty(authenticationContext.getProductProvider())) {
+                jsonObMap.put(APIThrottleConstants.SUBSCRIPTION_TYPE, APIConstants.API_PRODUCT_SUBSCRIPTION_TYPE);
+            } else {
+                jsonObMap.put(APIThrottleConstants.SUBSCRIPTION_TYPE, APIConstants.API_SUBSCRIPTION_TYPE);
+            }
+
+        }
+
+        if (totalTokens != null) {
+            jsonObMap.put(APIThrottleConstants.TOTAL_TOKENS, totalTokens);
+        }
+        if (promptTokens != null) {
+            jsonObMap.put(APIThrottleConstants.PROMPT_TOKENS, promptTokens);
+        }
+        if (completionTokens != null) {
+            jsonObMap.put(APIThrottleConstants.COMPLETION_TOKENS, completionTokens);
+        }
+
+        Object[] objects = new Object[]{messageContext.getMessageID(),
+                                        this.applicationLevelThrottleKey, this.applicationLevelTier,
+                                        this.apiLevelThrottleKey, this.apiLevelTier,
+                                        this.subscriptionLevelThrottleKey, this.subscriptionLevelTier,
+                                        this.resourceLevelThrottleKey, this.resourceLevelTier,
+                                        this.authorizedUser, this.apiContext, this.apiVersion,
+                                        this.appTenant, this.apiTenant, this.appId, this.apiName, jsonObMap.toString()};
+        org.wso2.carbon.databridge.commons.Event event = new org.wso2.carbon.databridge.commons.Event(streamID,
+                                                                                                      System.currentTimeMillis(), null, null, objects);
+        dataPublisher.tryPublish(event);
+    }
+
+    protected void buildMessage(org.apache.axis2.context.MessageContext axis2MessageContext) throws IOException,
+            XMLStreamException {
+        RelayUtils.buildMessage(axis2MessageContext);
+    }
+
+    protected ThrottleProperties getThrottleProperties() {
+        return ServiceReferenceHolder.getInstance().getThrottleProperties();
+    }
+    protected DataPublisher getDataPublisher() {
+        return ThrottleDataPublisher.getDataPublisher();
+    }
+}

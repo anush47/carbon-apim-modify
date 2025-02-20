@@ -1,0 +1,11 @@
+codecov:
+  require_ci_to_pass: no
+  max_report_age: off
+
+coverage:
+  precision: 2
+  round: down
+  range: "40...100"
+  
+comment:
+    after_n_builds: 3
