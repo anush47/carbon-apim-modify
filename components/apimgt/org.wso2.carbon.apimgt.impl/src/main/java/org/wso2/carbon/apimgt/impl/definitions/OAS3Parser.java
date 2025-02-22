@@ -148,6 +148,7 @@ public class OAS3Parser extends APIDefinition {
         if (useAI) {
             AIMockGenerator aiMockGenerator = new AIMockGenerator();
             aiMap = aiMockGenerator.generateAIMockCode(apiDefinition, theme);
+            swagger.addExtension("x-wso2-mockDB", aiMap.get("mockDB").getAsString());
         }
 
         // List for APIResMedPolicyList
@@ -183,6 +184,8 @@ public class OAS3Parser extends APIDefinition {
                 }
                 String finalScript = "";
                 if (useAI) {
+                    System.out.println("AI MAP: " + aiMap.get("paths").getAsJsonObject().get(path).getAsJsonObject()
+                            .get(apiResourceMediationPolicyObject.getVerb().toLowerCase()).getAsJsonObject().toString());
                     finalScript = aiMap.get("paths").getAsJsonObject().get(path).getAsJsonObject()
                             .get(apiResourceMediationPolicyObject.getVerb().toLowerCase()).getAsJsonObject()
                             .get("code").getAsString();
