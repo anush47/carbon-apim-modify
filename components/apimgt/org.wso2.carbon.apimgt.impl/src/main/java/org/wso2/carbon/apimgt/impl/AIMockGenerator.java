@@ -169,7 +169,7 @@ public final class AIMockGenerator {
                 return "Generate ES3 JavaScript for rhinojs to mock OpenAPI from: " + swagger.toString() + "\n\n"
                                 + "Instructions:\n"
                                 + "- Extract request data via mc.getProperty() and mc.getPayloadJSON().\n"
-                                + "- Get path params from mc.getProperty('REST_FULL_REQUEST_PATH').\n"
+                                + "- Get path params in the format mc.getProperty('uri.var.petId'). petId is the parameter name. \n"
                                 + "- Prepopulate mockDB with 3+ '" + theme + "' themed records.\n"
                                 + "- Load mockDB from mc.getProperty('mockDB').\n"
                                 + "- Handle all status codes, support JSON/XML, and persist mockDB updates "
